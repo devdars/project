@@ -1,195 +1,170 @@
+
 <?php 
 
-	include("classes/connect.php");
-	include("classes/signup.php");
+class Signup
+{
 
-	$first_name = "";
-	$last_name = "";
-	$gender = "";
-	$email = "";
-	$birthday="";
+	private $error = "";
 
-	if($_SERVER['REQUEST_METHOD'] == 'POST')
+	public function evaluate($data)
 	{
 
+		foreach ($data as $key => $value) {
+			# code...
 
-		$signup = new Signup();
-		$result = $signup->evaluate($_POST);
-		
-		if($result != "")
-		{
+			
 
-			echo "<div style='text-align:center;font-size:18px;color:white;background-color:grey;'>";
-			echo "<br>The following errors occured:<br><br>";
-			echo $result;
-			echo "</div>";
-		}else
-		{
+			if($key == "email")
+			{
+				if (!preg_match("/([\w\-]+\@[\w\-]+\.[\w\-]+)/",$value))
+				{
+        
+ 					$this->error = $this->error . "Invalid email address!<br>";
+    			}
+			}
+			if($key == "password2")
+			{
+			
+				$number = preg_match('@[0-9]@', $value);
+				$uppercase = preg_match('@[A-Z]@', $value);
+				$lowercase = preg_match('@[a-z]@', $value);
+				$specialChars = preg_match('@[^\w]@', $value);
+				if(strlen($value) < 8 || !$number || !$uppercase || !$lowercase || !$specialChars)
+				{
+					$this->error = $this->error . "Password should be atleast 8 characters and must contain at least a number, an upper case letter, a lower case letter and a special character.<br>";
+					
+				}
+				else if($_POST['password']!=$value)
+			{
+				
+				$this->error = $this->error . "Passwords do not match!<br>";
+			}
+			}
+			if($key == "first_name")
+			{
+				if (is_numeric($value)) {
+        
+ 					$this->error = $this->error . "First name can't be a number<br>";
+    			}
+				if (strstr($value, " ")) {
+        
+ 					$this->error = $this->error . "First name can't have spaces<br>";
+    			}
 
-			header("Location: login.php");
-			die;
+    			
+ 
+			}
+
+			if($key == "last_name")
+			{
+				if (is_numeric($value)) {
+        
+ 					$this->error = $this->error . "Last name can't be a number<br>";
+    			}
+
+    			if (strstr($value, " ")) {
+        
+ 					$this->error = $this->error . "Last name can't have spaces<br>";
+    			}
+
+			}
+			
+				
+			
+  
+			
+		}
+
+		$DB = new Database();
+
+		//check tag name
+		$data['tag_name'] = strtolower($data['first_name'] . $data['last_name']);
+
+		$sql = "select id from users where tag_name = '$data[tag_name]' limit 1";
+		$check = $DB->read($sql);
+		while(is_array($check)){
+
+			$data['tag_name'] = strtolower($data['first_name'] . $data['last_name']) . rand(0,9999);
+			$sql = "select id from users where tag_name = '$data[tag_name]' limit 1";
+			$check = $DB->read($sql);
+		}
+
+		$data['userid'] = $this->create_userid();
+		//check userid
+		$sql = "select id from users where userid = '$data[userid]' limit 1";
+		$check = $DB->read($sql);
+		while(is_array($check)){
+
+			$data['userid'] = $this->create_userid();
+			$sql = "select id from users where userid = '$data[userid]' limit 1";
+			$check = $DB->read($sql);
+		}
+
+		//check email
+		$sql = "select id from users where email = '$data[email]' limit 1";
+		$check = $DB->read($sql);
+		if(is_array($check)){
+
+			 $this->error = $this->error . "Another user is already using that email<br>";
 		}
  
 
-		$first_name = $_POST['first_name'];
-		$last_name = $_POST['last_name'];
-		$gender = $_POST['gender'];
-		$email = $_POST['email'];
-		$birthday = $_POST['birthday'];
+		if($this->error == "")
+		{
 
+			//no error
+			$this->create_user($data);
+		}else
+		{
+			return $this->error;
+		}
+	}
+
+	public function create_user($data)
+	{
+
+		$first_name = ucfirst($data['first_name']);
+		$last_name = ucfirst($data['last_name']);
+		$gender = $data['gender'];
+		$email = $data['email'];
+		$password = $data['password'];
+		$birthday=$data['birthday'];
+		$userid = $data['userid'];
+		$tag_name = $data['tag_name'];
+		$date = date("Y-m-d H:i:s");
+		$type = "profile";
+
+		$password = hash("sha1", $password);
+		
+		//create these
+		$url_address = strtolower($first_name) . "." . strtolower($last_name);
+
+		$query = "insert into users 
+		(type,userid,first_name,last_name,gender,birthday,email,password,url_address,tag_name,date) 
+		values 
+		('$type','$userid','$first_name','$last_name','$gender','$birthday','$email','$password','$url_address','$tag_name','$date')";
+
+
+		$DB = new Database();
+		$DB->save($query);
+	}
+ 
+	private function create_userid()
+	{
+
+		$length = rand(4,19);
+		$number = "";
+		for ($i=0; $i < $length; $i++) { 
+			# code...
+			$new_rand = rand(0,9);
+
+			$number = $number . $new_rand;
+			
+		}
+
+		return $number;
 	}
 
 
-	
-
-?>
-
-<html> 
-
-	<head>
-		
-		<title>MyBook | Signup</title>
-	</head>
-
-	<style>
-		
-		#bar{
-			height:100px;
-			background-color: rgb(59,89,152);
-			color: #d9dfeb;
-			padding: 4px;
-		}
-
-		#signup_button{
-
-			background-color: #42b72a;
-			width: 70px;
-			text-align: center;
-			padding:4px;
-			border-radius: 4px;
-			float:right;
-			color: black;
-		}
-
-		#bar2{
-
-			background-color: white;
-			width:800px;
-			margin:auto;
-			margin-top: 50px;
-			padding:10px;
-			padding-top: 50px;
-			text-align: center;
-			font-weight: bold;
-			
-
-		}
-
-		#text{
-
-			height: 40px;
-			width: 300px;
-			border-radius: 4px;
-			border:solid 1px #ccc;
-			padding: 4px;
-			font-size: 14px;
-		}
-		#birthday
-		{
-			
-			height: 40px;
-			width: 300px;
-			border-radius: 4px;
-			border:solid 1px #ccc;
-			padding: 4px;
-			font-size: 14px;
-			
-		}
-
-		#button{
-
-			width: 300px;
-			height: 40px;
-			border-radius: 4px;
-			font-weight: bold;
-			border:none;
-			background-color: rgb(59,89,152);
-			color: white;
-		}
-		
-		
-
-	</style>
-	
-
-
-	<body style="font-family: tahoma;background-color: #e9ebee;">
-		
-		<div id="bar">
-
-			<div style="font-size: 40px;">MyBook</div>
-			<a href="login.php">
-			<div id="signup_button">Log in</div>
-			</a>
-		</div>
-
-		<div id="bar2">
-			
-			Sign up to MyBook and stay connected!<br><br>
-
-			<form method="post" action="">
-
-				<input  value="<?php echo $first_name ?>"  name="first_name" type="text" id="text"  style="text-transform: capitalize;" placeholder="First name" required="true" title="No white spaces and numbers allowed"<br><br>
-				<br>
-				<input value="<?php echo $last_name ?>" name="last_name" type="text" id="text"  style="text-transform: capitalize;" placeholder="Last name" required="true" title="No white spaces and numbers allowed"><br><br>
-
-				
-				<select id="text" name="gender" required="true">
-					<option value="<?php echo $gender ?>" selected>Select your gender</option>
-					
-					<option>Male</option>
-					<option>Female</option>
-					<option>Others</option>
-
-				</select>
-				<br><br>
-				<input value="<?php echo $birthday ?>" type="text"   placeholder="Select your birthday" onfocus="(this.type='date')" onblur="(this.type='text')"  data-date-format='yyyy-mm-dd' id="birthday" name="birthday" required="true"><br><br>
-				<input value="<?php echo $email ?>"  name="email" type="text" id="text" placeholder="Email" required="true" title="No white spaces allowed"><br><br>
-				
-				<input name="password" type="password" id="text"  onmousedown="this.type='text'"
-       onmouseup="this.type='password'"
-       onmousemove="this.type='password'" placeholder="Password" required="true" title="Password should be atleast 8 characters and must contain at least a number, an upper case letter, a lower case letter and a special character">
-				
-				<br><br>
-				<input name="password2" type="password" id="text"  onmousedown="this.type='text'"
-       onmouseup="this.type='password'"
-       onmousemove="this.type='password'" placeholder="Retype Password" required="true"><br><br>
-
-				<input type="submit" id="button" value="Sign up">
-				<br><br><br>
-
-			</form>
-			<script>
-			var today = new Date();
-var dd = today.getDate();
-var mm = today.getMonth() + 1; //January is 0!
-var yyyy = today.getFullYear();
-
-if (dd < 10) {
-   dd = '0' + dd;
 }
-
-if (mm < 10) {
-   mm = '0' + mm;
-} 
-    
-today = yyyy + '-' + mm + '-' + dd;
-document.getElementById("birthday").setAttribute("max", today);
-				</script>
-
-		</div>
-
-	</body>
-
-
-</html>
+	

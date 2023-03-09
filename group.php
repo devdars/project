@@ -1,448 +1,416 @@
-<?php
+<?php 
 
-	include("classes/autoload.php");
+class Group
+{
 
-	$login = new Login();
-	$_SESSION['mybook_userid'] = isset($_SESSION['mybook_userid']) ? $_SESSION['mybook_userid'] : 0;
-	
-	$USER = $login->check_login($_SESSION['mybook_userid'],false);
+	private $error = "";
  
- 	$group_data = array();
- 	
- 	if(isset($URL[1]) && is_numeric($URL[1])){
+ 		public function evaluate($data)
+	{
 
-	 	$group = new Group();
-	 	$g_data = $group->get_group($URL[1]);
+		foreach ($data as $key => $value) {
+			# code...
 
-	 	if(is_array($g_data)){
-	 		$group_data = $g_data[0];
-	 	}
+			if(empty($value))
+			{
+				$this->error = $this->error . $key . " is empty!<br>";
+			}
+
+ 			if($key == "group_name")
+			{
+				if (is_numeric($value)) {
+        
+ 					$this->error = $this->error . "Group name cant be a number<br>";
+    			}
+ 
+			}
+			
+			if($key == "group_type" && ($value != "Public" && $value != "Private"))
+			{
+         
+ 				$this->error = $this->error . "Please enter a valid group type<br>";
+  
+			}
+
+	 
+		}
+
+		$DB = new Database();
+
+		//check url address
+		$data['url_address'] = str_replace(" ","_",strtolower($data['group_name']));
+
+		$sql = "select id from users where url_address = '$data[url_address]' limit 1";
+		$check = $DB->read($sql);
+		while(is_array($check)){
+
+			$data['url_address'] = str_replace(" ","_",strtolower($data['group_name'])) . rand(0,9999);
+			$sql = "select id from users where url_address = '$data[url_address]' limit 1";
+			$check = $DB->read($sql);
+		}
+
+		$data['userid'] = $this->create_userid();
+		//check userid
+		$sql = "select id from users where userid = '$data[userid]' limit 1";
+		$check = $DB->read($sql);
+		while(is_array($check)){
+
+			$data['userid'] = $this->create_userid();
+			$sql = "select id from users where userid = '$data[userid]' limit 1";
+			$check = $DB->read($sql);
+		}
+ 
+
+		if($this->error == "")
+		{
+
+			//no error
+			$this->create_group($data);
+		}else
+		{
+			return $this->error;
+		}
+
+		
+	}
+
+	public function remove_member($groupid,$userid){
+
+		$DB = new Database();
+
+		$groupid = addslashes($groupid);
+		$userid = addslashes($userid);
+
+		$query = "update group_members set disabled = 1 where userid = '$userid' && groupid = '$groupid' ";
+		$DB->save($query);
+
+		
+		
+	}
+
+	public function edit_member_access($groupid,$userid,$role){
+
+		$DB = new Database();
+
+		$groupid = addslashes($groupid);
+		$userid = addslashes($userid);
+		$role = addslashes($role);
+		$me = addslashes($_SESSION['mybook_userid']);
+		
+		$query = "update group_members set role = '$role' where userid = '$userid' && groupid = '$groupid' ";
+		$DB->save($query);
+	
+		//notify user of this change
+ 		$row = $this->get_group($groupid);
+ 		if(is_array($row)){
+
+ 			$row = $row[0];
+ 			$row['owner'] = $userid;
+ 			add_notification($me,"role",$row);
+ 		}
+	}
+
+	public function get_member_role($groupid,$userid){
+
+		$DB = new Database();
+		$role = "Unknown";
+
+		$groupid = addslashes($groupid);
+		$userid = addslashes($userid);
+
+		$query = "select role from group_members where userid = '$userid' && groupid = '$groupid' && disabled = 0";
+		$result = $DB->read($query);
+		if(is_array($result)){
+			return $result[0]['role'];
+		}
+
+		$query = "select id from users where userid = '$groupid' && owner = '$userid' limit 1";
+		$result = $DB->read($query);
+		if(is_array($result)){
+			return "admin";
+		}
+
+		return $role;
+	}
+
+	
+	public function create_group($data)
+	{
+
+		$group_name = ucfirst(addslashes($data['group_name']));
+		$userid = $data['userid'];
+		$url_address = $data['url_address'];
+		$type = 'group';
+		$group_type = addslashes($data['group_type']);
+		$date = date("Y-m-d H:i:s");
+		$owner = addslashes($_SESSION['mybook_userid']);
+
+		//create these
+		$url_address = strtolower($group_name) . "." . rand(0,9999);
+
+		$query = "insert into users 
+		(userid,type,group_type,first_name,url_address,date,owner) 
+		values 
+		('$userid','$type','$group_type','$group_name','$url_address','$date','$owner')";
+
+		$DB = new Database();
+		$DB->save($query);
+	}
+ 
+ 	public function join_group($groupid,$userid){
+
+ 		$DB = new Database();
+ 		$groupid = esc($groupid);
+ 		$userid = esc($userid);
+
+ 		$query = "select * from group_requests where userid = '$userid' && groupid = '$groupid' limit 1";
+ 		$check = $DB->read($query);
+
+ 		if($check){
+ 			$check = $check[0];
+ 			$query = "update group_requests set disabled = 0 where id = '$check[id]' limit 1";
+ 		}else{
+ 			$query = "insert into group_requests (groupid,userid) values ('$groupid','$userid')";
+ 		}
+
+		$DB->save($query);
+ 	}
+
+ 	public function accept_request($groupid,$userid,$action){
+
+ 		$DB = new Database();
+ 		$groupid = esc($groupid);
+ 		$userid = esc($userid);
+ 		$action = esc($action);
+ 		$role = "member";
+
+ 		if($action == "accept"){
+	 		
+	 		$query = "select * from group_members where userid = '$userid' && groupid = '$groupid' limit 1";
+	 		$check = $DB->read($query);
+
+	 		if($check){
+	 			$check = $check[0];
+	 			$query = "update group_members set disabled = 0 where id = '$check[id]' limit 1";
+				$DB->save($query);
+				
+	 		}else{
+	 			$query = "insert into group_members (groupid,userid,role) values ('$groupid','$userid','$role')";
+				$DB->save($query);
+	 		}
+
+		}
+		
+		$query = "update group_requests set disabled = 1 where  userid = '$userid' && groupid = '$groupid' limit 1";
+		$DB->save($query);
+
+		$query = "update group_invites set disabled = 1 where  userid = '$userid' && groupid = '$groupid' limit 1";
+		$DB->save($query);
+
+		
+ 	}
+
+
+ 	public function get_invited($groupid){
+
+ 		$DB = new Database();
+
+ 		$groupid = addslashes($groupid);
+ 		$me = addslashes($_SESSION['mybook_userid']);
+ 		$query = "select * from group_invites where groupid = '$groupid' && userid = '$me' && disabled = 0 ";
+ 		$check = $DB->read($query);
+ 		if(is_array($check)){
+
+ 			return $check;
+ 		}
+
+ 		return false;
+ 	}
+
+ 	public function invite_to_group($groupid,$userid,$me){
+
+ 		$groupid = addslashes($groupid);
+ 		$userid = addslashes($userid);
+ 		$me = addslashes($me);
+
+ 		$DB = new Database();
+ 		
+ 		$query = "select * from group_invites where groupid = '$groupid' && userid = '$userid' && inviter = '$me' ";
+ 		$check = $DB->read($query);
+ 		if(is_array($check)){
+
+ 			$id = $check[0]['id'];
+ 			$query = "update group_invites set disabled = 0 where id = '$id' limit 1";
+ 			$check = $DB->save($query);
+ 			
+ 		}else{
+ 			$query = "insert into group_invites (groupid,userid,inviter) values ('$groupid','$userid','$me')";
+ 			$check = $DB->save($query);
+ 		}
+
+ 		//notify user of invitation
+ 		$row = $this->get_group($groupid);
+ 		if(is_array($row)){
+
+ 			$row = $row[0];
+ 			$row['owner'] = $userid;
+ 			add_notification($me,"invite",$row);
+ 		}
+
 
  	}
  	
-	//posting starts here
-	if($_SERVER['REQUEST_METHOD'] == "POST")
+
+ 	public function get_requests($groupid){
+
+ 		$DB = new Database();
+ 		$groupid = esc($groupid);
+
+ 		$query = "select * from group_requests where groupid = '$groupid' && disabled = 0 ";
+ 		$check = $DB->read($query);
+
+ 		if($check){
+ 			return $check;
+ 		}
+
+ 		return false;
+
+ 	}
+
+ 	public function get_members($groupid,$limit = 100){
+
+ 		$DB = new Database();
+ 		$groupid = esc($groupid);
+
+ 		$query = "select owner from users where userid = '$groupid' limit 1";
+ 		$check1 = $DB->read($query);
+ 		$result = false;
+
+ 		if($check1){
+			
+			$check1[0]['userid'] = $check1[0]['owner'];
+			$check1[0]['role'] = "admin";
+			
+			$result = $check1;
+			$query = "select * from group_members where groupid = '$groupid' && disabled = 0 limit $limit";
+	 		$check = $DB->read($query);
+
+	 		if($check){
+
+	 			$result = array_merge($check1, $check);
+	 			return $result;
+	 		}
+
+	 		return $result;
+ 		}
+
+
+ 		return false;
+
+ 	}
+
+ 	public function get_invites($group_id,$id,$type){
+
+ 		$group_id = addslashes($group_id);
+
+		$DB = new Database();
+		$type = addslashes($type);
+
+		if(is_numeric($id)){
+ 
+			//get like details
+			$sql = "select likes from likes where type='$type' && contentid = '$id' limit 1";
+			$result = $DB->read($sql);
+			if(is_array($result)){
+
+				$likes = json_decode($result[0]['likes'],true);
+
+				//get all members of the group
+				$members = $this->get_members($group_id,100000);
+				if(is_array($members)){
+
+					$members = array_column($members, "userid");
+					if(is_array($likes)){
+						foreach ($likes as $key => $like) {
+							# code...
+							if(in_array($like['userid'], $members)){
+								unset($likes[$key]);
+							}
+						}
+
+						$likes = array_values($likes);
+					}
+				}
+				return $likes;
+			}
+		}
+
+
+		return false;
+	}
+
+	private function create_userid()
 	{
 
-		include("change_image.php");
-		
-		if(isset($_POST['first_name'])){
+		$length = rand(4,19);
+		$number = "";
+		for ($i=0; $i < $length; $i++) { 
+			# code...
+			$new_rand = rand(0,9);
 
-			if(group_access($_SESSION['mybook_userid'],$group_data,'admin')){
-				$settings_class = new Settings();
-				$settings_class->save_settings($_POST,$group_data['userid']);
+			$number = $number . $new_rand;
+		}
+
+		return $number;
+	}
+
+	public function get_my_groups($owner)
+	{
+
+		$DB = new Database();
+		$query = "select * from users where owner = '$owner' && type = 'group' ";
+		$result = $DB->read($query);
+
+		//check in group members as well
+		$query = "select * from group_members where disabled = 0 && userid = '$owner' ";
+		$result2 = $DB->read($query);
+
+		if(is_array($result2))
+		{
+			$groupids = array_column($result2, "groupid");
+			$groupids = "'" . implode("','", $groupids) . "'";
+			
+			//check in group members as well
+			$query = "select * from users where userid in ($groupids) && type = 'group' ";
+			$group_rows = $DB->read($query);
+
+			if(is_array($group_rows))
+			{
+				foreach ($group_rows as $row) {
+					# code...
+					$result[] = $row;
+				}
 			}
 
-			header("Location: " . ROOT . "group/" . $group_data['userid'] . "/settings");
-			die;
-
-		}elseif(isset($_POST['post'])){
-
-			$post = new Post();
-			$id = $_SESSION['mybook_userid'];
-			$owner = $group_data['userid'];
-			$result = $post->create_post($id, $_POST,$_FILES,$owner);
-			
-			if($result == "")
-			{
-				
-				header("Location: " . ROOT . "group/" . $group_data['userid']);
-				die;
-			}else
-			{
-
-				echo "<div style='text-align:center;font-size:12px;color:white;background-color:grey;'>";
-				echo "<br>The following errors occured:<br><br>";
-				echo $result;
-				echo "</div>";
-			}
-		}
-			
-	}
-
-	if(count($group_data) > 0){
-
-		//collect posts
-		$post = new Post();
-		$id = $group_data['userid'];
-		
-		$posts = $post->get_posts($id,'group');
-
-		//collect friends
-		$user = new User();
-	 	
-		$friends = $user->get_following($group_data['userid'],"user");
-
-		$image_class = new Image();
-
-		//check if this is from a notification
-		if(isset($URL[3])){
-			notification_seen($URL[3]);
 		}
 
-	}
-
-
-
-?>
-
-<!DOCTYPE html>
-	<html>
-	<head>
-		<title>Group | Mybook</title>
-	</head>
-
-	<style type="text/css">
-		
-		#blue_bar{
-
-			height: 50px;
-			background-color: #405d9b;
-			color: #d9dfeb;
-
-		}
-
-		#search_box{
-
-			width: 400px;
-			height: 20px;
-			border-radius: 5px;
-			border:none;
-			padding: 4px;
-			font-size: 14px;
-			background-image: url(search.png);
-			background-repeat: no-repeat;
-			background-position: right;
-
-		}
-
-		#textbox{
-
-			width: 100%;
-			height: 20px;
-			border-radius: 5px;
-			border:none;
-			padding: 4px;
-			font-size: 14px;
-			border: solid thin grey;
-			margin:10px;
- 
-		}
-
-		#profile_pic{
-
-			width: 150px;
-			margin-top: -300px;
-			border-radius: 50%;
-			border:solid 2px white;
-		}
-
-		#menu_buttons{
-
-			width: 100px;
-			display: inline-block;
-			margin:2px;
-		}
-
-		#friends_img{
-
-			width: 75px;
-			float: left;
-			margin:8px;
-
-		}
-
-		#friends_bar{
-
-			background-color: white;
-			min-height: 400px;
-			margin-top: 20px;
-			color: #aaa;
-			padding: 8px;
-		}
-
-		#friends{
-
-		 	clear: both;
-		 	font-size: 12px;
-		 	font-weight: bold;
-		 	color: #405d9b;
-		}
-
-		textarea{
-
-			width: 100%;
-			border:none;
-			font-family: tahoma;
-			font-size: 14px;
-			height: 60px;
-
-		}
-
-		#post_button{
-
-			float: right;
-			background-color: #405d9b;
-			border:none;
-			color: white;
-			padding: 4px;
-			font-size: 14px;
-			border-radius: 2px;
-			width: 50px;
-			min-width: 50px;
-			cursor: pointer;
-		}
- 
- 		#post_bar{
-
- 			margin-top: 20px;
- 			background-color: white;
- 			padding: 10px;
- 		}
-
- 		#post{
-
- 			padding: 4px;
- 			font-size: 13px;
- 			display: flex;
- 			margin-bottom: 20px;
- 		}
-
-	</style>
-
-	<body style="font-family: tahoma; background-color: #d0d8e4;">
-
-		<br>
-		<?php include("header.php"); ?>
- 
- 		<?php if(count($group_data) > 0): ?>
-
-		<!--change cover image area-->
- 		<div id="change_cover_image" style="display:none;position:absolute;width: 100%;height: 100%;background-color: #000000aa;">
- 			<div style="max-width:600px;margin:auto;min-height: 400px;flex:2.5;padding: 20px;padding-right: 0px;">
- 					
- 					<form method="post" action="<?=ROOT?>group/<?=$group_data['userid']?>/cover"  enctype="multipart/form-data">
-	 					<div style="border:solid thin #aaa; padding: 10px;background-color: white;">
-
-	 						<input type="file" name="file"><br>
-	 						<input id="post_button" type="submit" style="width:120px;" value="Change">
-	 						<br>
-							<div style="text-align: center;">
-								<br><br>
-							<?php
-
- 	 							echo "<img src='" . ROOT . "$group_data[cover_image]' style='max-width:500px;' >";
-								 
-	 						?>
-							</div>
-	 					</div>
-  					</form>
-
- 				</div>
- 		</div>
-
-		<!--cover area-->
-		<div style="width: 800px;margin:auto;min-height: 400px;">
-			
-			<div style="background-color: white;text-align: center;color: #405d9b">
-
-					<?php 
-
-						$image = "images/cover_image.jpg";
-						if(file_exists($group_data['cover_image']))
-						{
-							$image = $image_class->get_thumb_cover($group_data['cover_image']);
-						}
-					?>
-
-				<img src="<?php echo ROOT . $image ?>" style="width:100%;">
-
-
-				<span style="font-size: 12px;">
-					
-					<?php if(i_own_content($group_data)):?>
-					
-						<a onclick="show_change_cover_image(event)" style="text-decoration: none;color:#f0f;" href="<?=ROOT?>change_profile_image/cover">Change Cover</a>
-					
-					<?php endif; ?>
-
-				</span>
-				<br>
-					<div style="font-size: 20px;color: black;">
-						<a href="<?=ROOT?>group/<?php echo $group_data['userid'] ?>">
-							<?php echo $group_data['first_name'] ?><br>
-							<span style="font-size: 12px;">[<?php echo $group_data['group_type'] ?> Group]</span>
- 						</a>
- 					 
-						<br>
- 							<?php if(!group_access($_SESSION['mybook_userid'],$group_data,'member')):?>
-								<?php if(!group_access($_SESSION['mybook_userid'],$group_data,'request')):?>
-	  							
-		  							<a href="<?=ROOT?>join/<?=$group_data['userid']?>">
-										<input id="post_button" type="button" value="Join Group" style="margin-right:10px;background-color: #821b91;width:auto;">
-									</a>
-								<?php else: ?>
-
-									<input id="post_button" type="button" value="Request sent" style="margin-right:10px;background-color: #821b91;width:auto;">
-								<?php endif; ?>
-							<?php endif; ?>
-
-							<?php if(group_access($_SESSION['mybook_userid'],$group_data,'member')):?>
-							<a href="<?=ROOT?>group/<?php echo $group_data['userid'] ?>/invite">
-								<input id="post_button" type="button" value="Invite" style="margin-right:10px;background-color: #1b9186;width:auto;">
-							</a>
-							<?php endif; ?>
-							
- 
-					</div>
-				<br>
-				<br>
-
-					<?php 
-						$members_count = $group->get_members($group_data['userid']);
-						$members_str = "";
-						if(is_array($members_count)){
-							$members_str = "(".count($members_count).")";
-						}
-					?>
-
-				<a href="<?=ROOT?>group/<?php echo $group_data['userid'] ?>"><div id="menu_buttons">Discussion</div></a>
-				<a href="<?=ROOT?>group/<?php echo $group_data['userid'] ?>/about"><div id="menu_buttons">About</div></a>
-				<a href="<?=ROOT?>group/<?php echo $group_data['userid'] ?>/members"><div id="menu_buttons">Members <?=$members_str?></div></a>
-				<a href="<?=ROOT?>group/<?php echo $group_data['userid'] ?>/photos"><div id="menu_buttons">Photos</div></a>
-				
-				<?php if(group_access($_SESSION['mybook_userid'],$group_data,'moderator')):?>
-					<?php 
-						$requests_count = $group->get_requests($group_data['userid']);
-						$requests_str = "";
-						if(is_array($requests_count)){
-							$requests_str = "(".count($requests_count).")";
-						}
-					?>
-
-					<a href="<?=ROOT?>group/<?php echo $group_data['userid'] ?>/requests"><div id="menu_buttons">Requests <?=$requests_str?></div></a>
-				<?php endif;?>
-
-				<?php 
-					if(group_access($_SESSION['mybook_userid'],$group_data,'admin')){
-						
- 						echo '<a href="'.ROOT. 'group/'.$group_data['userid'].'/settings"><div id="menu_buttons">Settings</div></a>';
-					}
-				?>
-			</div>
-
-			<!--below cover area-->
-	 
-	 		<?php 
-
-	 			$section = "default";
-
-	 			if(isset($URL[2])){
-
-	 				$section = $URL[2];
-	 			}
-
-	 			if($group_data['group_type'] == 'Private' && !group_access($_SESSION['mybook_userid'],$group_data,'member')){
-	 				$section = "denied";
-	 			}
-
-	 			if($section == "default" || $section == "cover"){
-
-	 				include("group_content_default.php");
-	 			 
-	 			}elseif($section == "requests"){
-	 				
-	 				include("group_content_requests.php");
-				}elseif($section == "invite"){
-	 				
-	 				include("group_content_invite.php");
-				}elseif($section == "invited"){
-	 				
-	 				include("group_content_invited.php");
-
-	 			}elseif($section == "members"){
-	 				
-	 				include("group_content_members.php");
-	 			
-	 			}elseif($section == "about"){
-
-	 				include("group_content_about.php");
-
-	 			}elseif($section == "settings"){
-
-	 				include("group_content_settings.php");
-
-	 			}elseif($section == "photos"){
-
-	 				include("group_content_photos.php");
-	 			}elseif($section == "groups"){
-
-	 				include("group_content_groups.php");
-	 			}elseif($section == "denied"){
-
-	 				include("group_content_denied.php");
-	 			}
-
-
-
-	 		?>
-
-		</div>
-	<?php else: ?>
-
-		<div style="background-color: grey;color: white;padding: 1em;text-align: center;margin:1em;">That group was not found!
-			<br><br>
-			<a href="<?=ROOT?>profile/<?=$_SESSION['mybook_userid']?>/groups">
-				Go to groups
-			</a>
-		</div>
-	
-	<?php endif; ?>
-
-	</body>
-</html>
-
-<script type="text/javascript">
-	
-	function show_change_profile_image(event){
-
-		event.preventDefault();
-		var profile_image = document.getElementById("change_profile_image");
-		profile_image.style.display = "block";
-	}
-
-
-	function hide_change_profile_image(){
-
-		var profile_image = document.getElementById("change_profile_image");
-		profile_image.style.display = "none";
-	}
-
-	
-	function show_change_cover_image(event){
-
-		event.preventDefault();
-		var cover_image = document.getElementById("change_cover_image");
-		cover_image.style.display = "block";
-	}
-
-
-	function hide_change_cover_image(){
-
-		var cover_image = document.getElementById("change_cover_image");
-		cover_image.style.display = "none";
-	}
-
-
-	window.onkeydown = function(key){
-
-		if(key.keyCode == 27){
-
-			//esc key was pressed
-			hide_change_profile_image();
-			hide_change_cover_image();
+		if($result)
+		{
+
+			return $result;
+		}else
+		{
+			return false;
 		}
 	}
 
-	
-</script>
+	function get_group($id){
+
+		$id = addslashes($id);
+		$DB = new Database();
+		$query = "select * from users where userid = '$id' && type = 'group' limit 1";
+		return $DB->read($query);
+
+	}
+
+}

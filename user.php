@@ -1,44 +1,147 @@
+<?php 
 
-<div id="friends" style="display: inline-block; width: 200px;background-color: #eee;">
-	<?php 
+class User
+{
 
-		$image = "images/user_male.jpg";
-		if($FRIEND_ROW['gender'] == "Female")
+	public function get_data($id)
+	{
+
+		$query = "select * from users where userid = '$id' limit 1";
+		
+		$DB = new Database();
+		$result = $DB->read($query);
+
+		if($result)
 		{
-			$image = "images/user_female.jpg";
-		}
 
-		if(file_exists($FRIEND_ROW['profile_image']))
+			$row = $result[0];
+			return $row;
+		}else
 		{
-			$image = $image_class->get_thumb_profile($FRIEND_ROW['profile_image']);
+			return false;
 		}
+	}
+
+	public function get_user($id)
+	{
+
+		$query = "select * from users where userid = '$id' limit 1";
+		$DB = new Database();
+		$result = $DB->read($query);
+
+		if($result)
+		{
+			return $result[0];
+		}else
+		{
+
+			return false;
+		}
+	}
+
+	public function get_friends($id)
+	{
+
+		$query = "select * from users where userid != '$id' ";
+		$DB = new Database();
+		$result = $DB->read($query);
+
+		if($result)
+		{
+			return $result;
+		}else
+		{
+
+			return false;
+		}
+	}
+
+
+	public function get_following($id,$type){
+
+		$DB = new Database();
+		$type = addslashes($type);
+
+		if(is_numeric($id)){
  
+			//get following details
+			$sql = "select following from likes where type='$type' && contentid = '$id' limit 1";
+			$result = $DB->read($sql);
+			if(is_array($result)){
 
-	?>
-
-	<a href="<?=ROOT?><?php echo $FRIEND_ROW['type']; ?>/<?php echo $FRIEND_ROW['userid']; ?>">
- 		<img id="friends_img" src="<?php echo ROOT . $image ?>">
-		<br>
-		<?php echo $FRIEND_ROW['first_name'] . " " . $FRIEND_ROW['last_name'] ?>
-		<br>
-
-		<?php 
-
-			$online = "Last seen: <br> Unknown";
-			if($FRIEND_ROW['online'] > 0){
-				$online = $FRIEND_ROW['online'];
-
-				$current_time = time();
-				$threshold = 60 * 2;//2 minutes
-
-				if(($current_time - $online) < $threshold){
-					$online = "<span style='color:green;'>Online</span>";
-				}else{
-					$online = "Last seen: <br>" . Time::get_time(date("Y-m-d H:i:s",$online));
-				}
+				$following = json_decode($result[0]['following'],true);
+				return $following;
 			}
-		?>
-		<br>
-		<span style="color: grey;font-size: 11px;font-weight: normal;"><?php echo $online ?></span>
- 	</a>
-</div>
+		}
+
+
+		return false;
+	}
+
+	public function follow_user($id,$type,$mybook_userid){
+
+			if($id == $mybook_userid && $type == 'user'){
+				return;
+			}
+
+ 			$DB = new Database();
+ 			
+			//save likes details
+			$sql = "select following from likes where type='$type' && contentid = '$mybook_userid' limit 1";
+			$result = $DB->read($sql);
+			if(is_array($result)){
+
+				$likes = json_decode($result[0]['following'],true);
+
+				$user_ids = array_column($likes, "userid");
+ 
+				if(!in_array($id, $user_ids)){
+
+					$arr["userid"] = $id;
+					$arr["date"] = date("Y-m-d H:i:s");
+
+					$likes[] = $arr;
+
+					$likes_string = json_encode($likes);
+					$sql = "update likes set following = '$likes_string' where type='$type' && contentid = '$mybook_userid' limit 1";
+					$DB->save($sql);
+
+					$user = new User();
+					$single_post = $user->get_user($id);
+
+					//add notification
+					add_notification($_SESSION['mybook_userid'],"follow",$single_post);
+				}else{
+
+					$key = array_search($id, $user_ids);
+					unset($likes[$key]);
+
+					$likes_string = json_encode($likes);
+					$sql = "update likes set following = '$likes_string' where type='$type' && contentid = '$mybook_userid' limit 1";
+					$DB->save($sql);
+ 
+				}
+				
+
+			}else{
+
+				$arr["userid"] = $id;
+				$arr["date"] = date("Y-m-d H:i:s");
+
+				$arr2[] = $arr;
+
+				$following = json_encode($arr2);
+				$sql = "insert into likes (type,contentid,following) values ('$type','$mybook_userid','$following')";
+				$DB->save($sql);
+ 				
+ 				$user = new User();
+				$single_post = $user->get_user($id);
+
+				//add notification
+				add_notification($_SESSION['mybook_userid'],"follow",$single_post);
+			}
+
+	}
+
+	
+}

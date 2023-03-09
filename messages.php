@@ -1,362 +1,243 @@
-<?php 
+<?php
 
-	include("classes/autoload.php");
-	$image_class = new Image();
+Class Messages
+{
+	private $error = "";
 
-	$ERROR = "";
+	public function send($data, $files, $receiver)
+	{
 
-	$login = new Login();
-	$user_data = $login->check_login($_SESSION['mybook_userid']);
+		if(!empty($data['message']) || !empty($files['file']['name']))
+		{
+
+			$myimage = "";
+			$has_image = 0;
+  
+				if(!empty($files['file']['name']))
+				{
+
+					$userid = $_SESSION['mybook_userid'];
+					$folder = "uploads/" . $userid . "/";
+
+						//create folder
+						if(!file_exists($folder))
+						{
+
+							mkdir($folder,0777,true);
+							file_put_contents($folder . "index.php", "");
+						}
+					
+					$allowed[] = "image/jpeg";
  
- 	$USER = $user_data;
- 	
- 	if(isset($URL[1]) && is_numeric($URL[1])){
+					if(in_array($files['file']['type'], $allowed)){
 
-	 	$profile = new Profile();
-	 	$profile_data = $profile->get_profile($URL[1]);
+						$image_class = new Image();
 
-	 	if(is_array($profile_data)){
-	 		$user_data = $profile_data[0];
-	 	}
+						$myimage = $folder . $image_class->generate_filename(15) . ".jpg";
+						move_uploaded_file($files['file']['tmp_name'], $myimage);
 
- 	}
-	 
-	$msg_class = new Messages();
+						$image_class->resize_image($myimage,$myimage,1500,1500);
 
-  	//new message//check if thread already exists
-  	if(isset($URL[1]) && $URL[1] == "new"){
+						$has_image = 1;
+					}else{
 
-  		$old_thread = $msg_class->read($URL[2]);
-  		if(is_array($old_thread)){
-
-  			//redirect the user
-  			header("Location: ".ROOT."messages/read/". $URL[2]);
-			die;
-  		}
-  	}
-
-	//if a message was posted
-	if($ERROR == "" && $_SERVER['REQUEST_METHOD'] == "POST"){
+						$this->error .= "The selected image is not a valid type. only jpegs allowed!<br>";
+					}
+				}
  
-		$user_class = new User();
-		if(is_array($user_class->get_user($URL[2]))){
+			$message = "";
+			if(isset($data['message'])){
 
-			$ERROR = $msg_class->send($_POST,$_FILES,$URL[2]);
+				$message = esc($data['message']);
+			}
 
-			header("Location: ".ROOT."messages/read/". $URL[2]);
-			die;
-		}else{
-			$ERROR = "The requested user could not be found!";
+			//add tagged users
+			$tags = array();
+			$tags = get_tags($message);
+			$tags = json_encode($tags);
+
+			if(trim($message) == "" && $has_image == 0){
+
+				$this->error .= "Please type something to send!<br>";
+			}
+			
+			if($this->error == ""){
+
+				$DB = new Database();
+				$msgid = $this->create_msgid(60);
+				$sender = esc($_SESSION['mybook_userid']);
+  			 	$receiver = esc($receiver);
+
+				//check if thead exists
+		 		$query = "select * from messages where (sender = '$sender' && receiver = '$receiver') || (receiver = '$sender' && sender = '$receiver') limit 1";
+		 		$data = $DB->read($query);
+
+		 		if(is_array($data)){
+		 			$msgid = $data[0]['msgid'];
+		 		}
+
+   			 	$file = esc($myimage);
+ 				$query = "insert into messages (sender,msgid,receiver,message,file,tags) values ('$sender','$msgid','$receiver','$message','$file','$tags')";
+				$DB->save($query);
+
+				//notify those that were tagged
+				//tag($msgid);
+
+			}
+		}else
+		{
+			$this->error .= "Please type something to send!<br>";
 		}
 
-		
+		return $this->error;
 	}
 
-?>
+	public function read($userid){
 
-<!DOCTYPE html>
-	<html>
-	<head>
-		<title>Messages | Mybook</title>
-	</head>
+		$DB = new Database();
+ 		$me = esc($_SESSION['mybook_userid']);
+ 		$userid = esc($userid);
 
-	<style type="text/css">
-		
-		#blue_bar{
+ 		$query = "select * from messages where ((sender = '$me' && receiver = '$userid') && deleted_sender = 0) || ((receiver = '$me' && sender = '$userid') && deleted_receiver = 0) order by id desc limit 20";
+ 		$data = $DB->read($query);
 
-			height: 50px;
-			background-color: #405d9b;
-			color: #d9dfeb;
+ 		if(is_array($data)){
 
-		}
-
-		#search_box{
-
-			width: 400px;
-			height: 20px;
-			border-radius: 5px;
-			border:none;
-			padding: 4px;
-			font-size: 14px;
-			background-image: url(search.png);
-			background-repeat: no-repeat;
-			background-position: right;
-
-		}
-
-		#profile_pic{
-
-			width: 150px;
-			border-radius: 50%;
-			border:solid 2px white;
-		}
-
-		#menu_buttons{
-
-			width: 100px;
-			display: inline-block;
-			margin:2px;
-		}
-
-		#friends_img{
-
-			width: 75px;
-			float: left;
-			margin:8px;
-
-		}
-
-		#friends_bar{
-
-			min-height: 400px;
-			margin-top: 20px;
-			padding: 8px;
-			text-align: center;
-			font-size: 20px;
-			color: #405d9b;
-		}
-
-		#friends{
-
-		 	clear: both;
-		 	font-size: 12px;
-		 	font-weight: bold;
-		 	color: #405d9b;
-		}
-
-		textarea{
-
-			width: 100%;
-			border:none;
-			font-family: tahoma;
-			font-size: 14px;
-			height: 60px;
-
-		}
-
-		#post_button{
-
-			float: right;
-			background-color: #405d9b;
-			border:none;
-			color: white;
-			padding: 4px;
-			font-size: 14px;
-			border-radius: 2px;
-			width: 50px;
-		}
+ 			//set seen to 1
+			$msgid = $data[0]['msgid'];
+			$query = "update messages set seen = 1 where receiver = '$me' && msgid = '$msgid' ";
+			$DB->save($query);
  
- 		#post_bar{
+ 			sort($data);
+ 		}
+ 		return $data;
+	}
 
- 			margin-top: 20px;
- 			background-color: white;
- 			padding: 10px;
+	public function read_threads(){
+
+		$DB = new Database();
+ 		$me = esc($_SESSION['mybook_userid']);
+ 
+ 		//$query = "select * from messages where (sender = '$me' || receiver = '$me') group by msgid order by id desc limit 20";
+ 		$query = "select t1.* from messages t1 join (select id,msgid,max(date) mydate from messages where ((sender = '$me' && deleted_sender = 0) || (receiver = '$me' && deleted_receiver = 0)) group by msgid) t2 on t1.msgid = t2.msgid and t2.mydate = t1.date group by msgid";
+ 		$data = $DB->read($query);
+
+ 		if(is_array($data)){
+ 			sort($data);
+ 		}
+ 		return $data;
+	}
+
+	public function read_one_thread($msgid){
+
+		$msgid = esc($msgid);
+		$DB = new Database();
+ 		$me = esc($_SESSION['mybook_userid']);
+ 
+  		$query = "select t1.* from messages t1 join (select id,msgid,max(date) mydate from messages where (sender = '$me' || receiver = '$me') && msgid = '$msgid' group by msgid) t2 on t1.msgid = t2.msgid and t2.mydate = t1.date group by msgid";
+ 		$data = $DB->read($query);
+
+ 		if(is_array($data)){
+ 			return $data[0];
+ 		}
+ 		return false;
+	}
+	
+
+	public function read_one($id){
+
+		$id = (int)$id;
+
+		$DB = new Database();
+ 		$me = esc($_SESSION['mybook_userid']);
+
+ 		$query = "select * from messages where (sender = '$me' || receiver = '$me') && id = '$id' limit 1";
+ 		$data = $DB->read($query);
+
+ 		if(is_array($data))
+ 		{
+
+  			return $data[0];
  		}
 
- 		#post{
+ 		return false;
+	}
 
- 			padding: 4px;
- 			font-size: 13px;
- 			display: flex;
- 			margin-bottom: 20px;
+	public function delete_one($id){
+
+		$id = (int)$id;
+
+		$DB = new Database();
+ 		$me = esc($_SESSION['mybook_userid']);
+
+ 		$query = "select * from messages where (sender = '$me' || receiver = '$me') && id = '$id' limit 1";
+ 		$data = $DB->read($query);
+
+ 		if(is_array($data))
+ 		{
+ 			$data = $data[0];
+ 			if($data['sender'] == $me)
+ 			{
+ 				$query = "update messages set deleted_sender = 1 where id = '$id' limit 1";
+ 			}else
+ 			{
+  				$query = "update messages set deleted_receiver = 1 where id = '$id' limit 1";
+ 			}
+
+ 			$DB->save($query);
  		}
 
- 		#message_left{
+ 		return false;
+	}
 
- 			padding: 4px;
- 			font-size: 13px;
- 			display: flex;
- 			margin: 8px;
- 			width: 60%;
- 			float: left;
- 			border-radius: 10px;
+	public function delete_one_thread($msgid){
+
+		$id = esc($msgid);
+
+		$DB = new Database();
+ 		$me = esc($_SESSION['mybook_userid']);
+
+ 		$query = "select * from messages where (sender = '$me' || receiver = '$me') && msgid = '$id' ";
+ 		$data = $DB->read($query);
+
+ 		if(is_array($data))
+ 		{
+ 			foreach ($data as $row) {
+ 				# code...
+	 			$myid = $row['id'];
+	 			if($row['sender'] == $me)
+	 			{
+	 				$query = "update messages set deleted_sender = 1 where id = '$myid' limit 1";
+	 			}else
+	 			{
+	  				$query = "update messages set deleted_receiver = 1 where id = '$myid' limit 1";
+	 			}
+
+	 			$DB->save($query);
+	 		}
+
  		}
 
- 		#message_right{
+ 		return false;
+	}
 
- 			padding: 4px;
- 			font-size: 13px;
- 			display: flex;
- 			margin: 8px;
- 			width: 60%;
- 			float: right;
- 			border-radius: 10px;
- 			
- 		}
+	
+ 	private function create_msgid($length) {
 
- 		#message_thread{
+		$array = array(0,1,2,3,4,5,6,7,8,9,'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','-','_');
+		$text = "";
 
- 			padding: 4px;
- 			font-size: 13px;
- 			display: flex;
- 			margin: 8px;
-   			border-radius: 10px;
- 		}
+		$length = rand(4,$length);
 
-	</style>
+		for($i=0;$i<$length;$i++) {
 
-	<body style="font-family: tahoma; background-color: #d0d8e4;">
+			$random = rand(0,63);
+			
+			$text .= $array[$random];
 
-		<br>
-		<?php include("header.php"); ?>
+		}
 
-		<!--cover area-->
-		<div style="width: 800px;margin:auto;min-height: 400px;">
-		 
-			<!--below cover area-->
-			<div style="display: flex;">	
+		return $text;
+	}
 
-				<!--posts area-->
- 				<div style="min-height: 400px;flex:2.5;padding: 20px;padding-right: 0px;">
- 					
- 					<div style="border:solid thin #aaa; padding: 10px;background-color: white;">
-
-  						<form method="post" enctype="multipart/form-data">
- 							
-  								<?php
-
- 									if($ERROR != ""){
-
-								 		echo $ERROR;
-								 	}else{
-
-								 		if(isset($URL[1]) && $URL[1] == "read"){
-
- 								 			echo "Chatting with:<br><br>";
-	  										if(isset($URL[2]) && is_numeric($URL[2])){
-								 			
- 								 				$data = $msg_class->read($URL[2]);
-	  											
-	  											$user = new User();
-		 										$FRIEND_ROW = $user->get_user($URL[2]);
-
-		 										include "user.php";
-
-		 										echo "<a href='".ROOT."messages'>";
-		 										echo '<input id="post_button" type="button" style="width:auto;cursor:pointer;margin:4px;" value="All Messages">';
-		 										echo "</a>";
-
-		 										if(is_array($data)){
-			 										echo "<a href='".ROOT."delete/thread/". $data[0]['msgid'] ."'>";
-			 										echo '<input id="post_button" type="button" style="width:auto;cursor:pointer;background-color:#b76d40;margin:4px;" value="Delete Thread">';
-			 										echo "</a>";
-			 									}
-
-
-		 										echo '
- 		 										<div>';
- 		 											$user = new User();
-
- 		 											if(is_array($data)){
-	 		 											foreach ($data as $MESSAGE) {
-	 		 												# code...
-	  		 												//show($MESSAGE);
-			 												$ROW_USER = $user->get_user($MESSAGE['sender']);
-
-			 												if(i_own_content($MESSAGE)){
-	 		 													include "message_right.php";
-	 		 												}else{
-
-	  		 													include "message_left.php";
-			 												}
-	 		 											}
- 		 											}
-
-		 										echo '
-		 										</div>';
-
-		 										echo '
-		 										<div style="border:solid thin #aaa; padding: 10px;background-color: white;">
-
- 								 						<textarea name="message" placeholder="Write your message here"></textarea>
-								 						<input type="file" name="file" >
-								 						<input id="post_button" type="submit" value="Send">
-								 						<br>
- 							 						
-							 					</div>
-
-							 					';
-
-	  										}else{
-
-	  											echo "That user could not be found<br><br>";
-	  										}
-
-								 		}else
-								 		if(isset($URL[1]) && $URL[1] == "new"){
-
-	  										echo "Start New Message with:<br><br>";
-	  										if(isset($URL[2]) && is_numeric($URL[2])){
-	  											
-	  											$user = new User();
-		 										$FRIEND_ROW = $user->get_user($URL[2]);
-
-		 										include "user.php";
-
-		 										echo '
-		 										<div style="border:solid thin #aaa; padding: 10px;background-color: white;">
-
- 								 						<textarea name="message" placeholder="Write your message here"></textarea>
-								 						<input type="file" name="file" >
- 								 						<input id="post_button" type="submit" value="Send">
-								 						<br>
- 							 						
-							 					</div>
-
-							 					';
-
-	  										}else{
-
-	  											echo "That user could not be found<br><br>";
-	  										}
-	  										
-
-								 		}else{
-
-	  										echo "Messages<br><br>";
-											if(isset($URL[2]) && is_numeric($URL[2])){
-								 			
- 								 				$data = $msg_class->read($URL[2]);
-	  											
-	  											$user = new User();
-		 										$FRIEND_ROW = $user->get_user($URL[2]);
-
-		 										include "user.php";}
-		  									$data = $msg_class->read_threads();
-		  									$user = new User();
-		  									$me = esc($_SESSION['mybook_userid']);
-
-		  									if(is_array($data)){
-			  									foreach ($data as $MESSAGE) {
-			  										# code...
-			  										$myid = ($MESSAGE['sender'] == $me) ? $MESSAGE['receiver'] : $MESSAGE['sender'];
-
-			 										$ROW_USER = $user->get_user($myid);
-													
-
-			  										include("thread.php");
-			  									}
-		  									}else{
-		  										echo "You have no messages!";
-		  									}
-
-		  									echo "<br style='clear:both;'>";
-								 		}
-
-										
- 									}
- 								?>
-  							
-	 						
-	 						<br>
- 						</form>
- 					</div>
-  
-
- 				</div>
-			</div>
-
-		</div>
-
-	</body>
-</html>
+}
