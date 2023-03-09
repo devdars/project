@@ -1,68 +1,149 @@
-<!DOCTYPE html>
-<html >
-<head>
-  <meta charset="UTF-8">
-  <title>Bootstrap Snippet: Login Form</title>
-  
-  
-  <link rel='stylesheet prefetch' href='http://netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap.min.css'>
+<?php 
 
-      <link rel="stylesheet" href="css/style.css">
+session_start();
 
-  
-</head>
-
-<body>
-   
-    <div class="wrapper">
-    
-    <form class="form-signin" method="post" action="login.php">
-            
-      <h2 class="form-signin-heading">Login</h2>
-      <input type="text" class="form-control" name="r_lname" placeholder="Email Address" required="" autofocus />
-      <input type="password" class="form-control" name="r_pass" placeholder="Password" required=""/>      
-      <label class="checkbox">
-        <input type="checkbox" value="remember-me" id="rememberMe" name="rememberMe"> Remember me
-      </label>
-      <button class="btn btn-lg btn-primary btn-block" type="submit" name="login">Login</button>   
-      
-    </form>
-    
-  </div>
-  
-<h2 style="color: #FFF; text-align: center"><?php echo @$_GET['not_authorize']; ?></h2>
-  
-</body>
-</html>
-
-<?php
-include("db_con.php");
-
-if(isset($_POST['login'])){
+	include("classes/connect.php");
+	include("classes/login.php");
+ 
+	$email = "";
+	$password = "";
 	
-	$r_lname = mysqli_real_escape_string($con, $_POST['r_lname']);
-	$r_pass = mysqli_real_escape_string($con, $_POST['r_pass']);
+	if($_SERVER['REQUEST_METHOD'] == 'POST')
+	{
 
-	$select_user = "select * from receptionist where r_lname='$r_lname' AND r_pass='$r_pass'";
-	
-	$run_user = mysqli_query($con, $select_user);
-	
-	//">0" means one person is authorized to login
-	if(mysqli_num_rows($run_user)>0){
+
+		$login = new Login();
+		$result = $login->evaluate($_POST);
 		
-	$_SESSION['r_lname']=$r_lname; 
+		if($result != "")
+		{
+
+			echo "<div style='text-align:center;font-size:12px;color:white;background-color:grey;'>";
+			echo "<br>The following errors occured:<br><br>";
+			echo $result;
+			echo "</div>";
+		}else
+		{
+
+			header("Location:profile");
+			die;
+		}
+ 
+
+		$email = $_POST['email'];
+		$password = $_POST['password'];
 		
-	echo "<script>window.open('index.php?logged=You have Successfully Logged In!','_self')</script>";
-			
+
 	}
-	else{
-		
-	echo "<script>alert('Unser Name or Password is Incorrect!')</script>";
-		
-	}
-		
-}
 
+
+	
 
 ?>
 
+<html> 
+
+	<head>
+		
+		<title>MyBook | Log in</title>
+	</head>
+
+	<style>
+		
+		#bar{
+			height:100px;
+			background-color: rgb(59,89,152);
+			color: #d9dfeb;
+			padding: 4px;
+		}
+
+		#signup_button{
+
+			background-color: #42b72a;
+			width: 70px;
+			text-align: center;
+			padding:4px;
+			border-radius: 4px;
+			float:right;
+			color: black;
+		}
+		
+#signup_button2{
+
+			background-color: #42b72a;
+			width: 70px;
+			text-align: center;
+			padding:4px;
+			border-radius: 4px;
+			float:right;
+	margin-right: 10px;
+	color: black;
+		}
+		#bar2{
+
+			background-color: white;
+			width:800px;
+			margin:auto;
+			margin-top: 50px;
+			padding:10px;
+			padding-top: 50px;
+			text-align: center;
+			font-weight: bold;
+
+		}
+
+		#text{
+
+			height: 40px;
+			width: 300px;
+			border-radius: 4px;
+			border:solid 1px #ccc;
+			padding: 4px;
+			font-size: 14px;
+		}
+
+		#button{
+
+			width: 300px;
+			height: 40px;
+			border-radius: 4px;
+			font-weight: bold;
+			border:none;
+			background-color: rgb(59,89,152);
+			color: white;
+		}
+
+	</style>
+
+	<body style="font-family: tahoma;background-color: #e9ebee; ">
+		
+		<div id="bar">
+
+			<div style="font-size: 40px;">MyBook</div>
+			<a href="signup.php">
+			<div id="signup_button" >Signup </div></a>
+			<a href="admin/adminlogin.php"> 
+				<div id="signup_button2" >Admin</div>
+			</a>
+		</div>
+
+		<div id="bar2">
+			
+			<form method="post"><h3 class="mb-4">Log in to MyBook</h3>
+				<br>
+
+				<input name="email" value="<?php echo $email ?>" type="text" id="text" placeholder="Email" required="true"><br><br>
+				<input name="password" value="<?php echo $password ?>" type="password" id="text"  onmousedown="this.type='text'"
+       onmouseup="this.type='password'"
+       onmousemove="this.type='password'" placeholder="Password" required="true"><br><br>
+
+				<input type="submit" id="button" value="Log in">
+				<br><br><br>
+
+			</form>
+		</div>
+
+	</body>
+
+
+</html>
