@@ -1,73 +1,80 @@
-<!--top bar-->
-<?php 
-
-	$corner_image = "images/user_male.jpg";
-	if(isset($USER)){
-		
-		if(file_exists($USER['profile_image']))
-		{
-			$image_class = new Image();
-			$corner_image = $image_class->get_thumb_profile($USER['profile_image']);
-		}else{
-
-			if($USER['gender'] == "Female"){
-
-				$corner_image = "images/user_female.jpg";
-			}
-		}
-	}
-?>
-
-<div id="blue_bar">
-	<form method="get" action="<?=ROOT?>search">
-		<div style="width: 800px;margin:auto;font-size: 30px;">
-			
-			<a href="<?=ROOT?>home" style="color: white;">MyBook</a> 
-			&nbsp &nbsp <input type="text" id="search_box" name="find" placeholder="Search for people" />
-
-			<?php if(isset($USER)): ?>
-				<a href="<?=ROOT?>profile">
-				<img src="<?php echo ROOT . $corner_image ?>" style="width: 50px;float: right;">
-				</a>
-				<a href="<?=ROOT?>logout">
-				<span style="font-size:11px;float: right;margin:10px;color:white;">Logout</span>
-				</a>
-
-				<a href="<?=ROOT?>notifications">
-				<span style="display: inline-block;position: relative;">
-					<img src="<?=ROOT?>notif.svg" style="width:25px;float:right;margin-top: 10px">
-					<?php 
-						$notif = check_notifications();
-					?>
-					<?php if($notif > 0): ?>
-						<div style="background-color: red;color: white;position: absolute;right:-15px;
-						width:15px;height: 15px;border-radius: 50%;padding: 4px;text-align:center;font-size: 14px;"><?= $notif ?></div>
-					<?php endif; ?>
-				</span>
-				</a>
-
-				<a href="<?=ROOT?>messages">
-				<span style="display: inline-block;position: relative;margin-left: 10px;">
- 					<svg fill="orange" style="float:right;margin-top: 10px" width="25" height="25" viewBox="0 0 24 24"><path d="M12 12.713l-11.985-9.713h23.971l-11.986 9.713zm-5.425-1.822l-6.575-5.329v12.501l6.575-7.172zm10.85 0l6.575 7.172v-12.501l-6.575 5.329zm-1.557 1.261l-3.868 3.135-3.868-3.135-8.11 8.848h23.956l-8.11-8.848z"/></svg>
-					<?php 
-						$notif = check_messages();
-					?>
-					<?php if($notif > 0): ?>
-						<div style="background-color: red;color: white;position: absolute;right:-15px;
-						width:15px;height: 15px;border-radius: 50%;padding: 4px;text-align:center;font-size: 14px;"><?= $notif ?></div>
-					<?php endif; ?>
-				</span>
-				</a>
-
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+      <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MyBook | Admin</title>
+	<!-- BOOTSTRAP STYLES-->
+    <link href="assets/css/bootstrap.css" rel="stylesheet" />
+     <!-- FONTAWESOME STYLES-->
+    <link href="assets/css/font-awesome.css" rel="stylesheet" />
+        <!-- CUSTOM STYLES-->
+    <link href="assets/css/custom.css" rel="stylesheet" />
+     <!-- GOOGLE FONTS-->
+   <link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' />
+</head>
+<body >
+	
+    <div id="wrapper">
+        <nav class="navbar navbar-default navbar-cls-top " role="navigation" style="margin-bottom: 0; background-color: #003366"  > 
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".sidebar-collapse">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="viewusers.php" style="background-color: #003366">MyBook Admin</a> 
+            </div>
+  <div style="color: white;
+padding: 15px 50px 5px 50px;
+float: right;
+font-size: 16px;">  <a href="adminlogin.php" class="btn btn-success">Logout</a> </div>
+        </nav>   
+           <!-- /. NAV TOP  -->
+                <nav class="navbar-default navbar-side" role="navigation" >
+            <div class="sidebar-collapse"  >
+                <ul class="nav" id="main-menu"  >
 				
+				    <li class="text-center" >
+                    <img  src="assets/img/image1.png" class="user-image img-responsive"/>
+					</li>
+                    <li >
+                        <a  href="viewusers.php" style="font-family: Open Sans" ><i class="fa fa- fa-3x"></i>VIEW ALL USERS</a>
+                    </li>
+					
+					<li>
+                        <a  href="groupreport.php" style="font-family: Open Sans"><i class="fa fa- fa-3x"></i>VIEW GROUPS</a>
+                        <a  href="between-dates-reports.php" style="font-family: Open Sans"><i class="fa fa- fa-3x"></i>VIEW DATEWISE JOIN REPORT</a>
+                    </li>
+					
+					
 
-			<?php else: ?>
-				<a href="<?=ROOT?>login">
-				<span style="font-size:13px;float: right;margin:10px;color:white;">Login</span>
-				</a>
-			<?php endif; ?>
-
-
-		</div>
-	</form>
-</div>
+					<li  >
+                        <a  href="viewmale.php" style="font-family: Open Sans"><i class="fa fa- fa-3x"></i> VIEW MALE USERS</a>
+                    </li>	
+					<li  >
+                        <a  href="viewfemale.php" style="font-family: Open Sans"><i class="fa fa- fa-3x"></i> VIEW FEMALE USERS</a>
+                    </li>	
+					<li  >
+                        <a  href="viewother.php" style="font-family: Open Sans"><i class="fa fa- fa-3x"></i> VIEW OTHER USERS</a>
+                    </li>	
+                    						   <li  >
+                        <a  href="viewfeedback.php" style="font-family: Open Sans"><i class="fa fa- fa-3x"></i> VIEW FEEDBACKS</a>
+                    </li>	
+					<li>
+					
+					</li>
+					<li>
+					
+					</li>
+                </ul>
+               
+            </div>
+					
+            
+        </nav>  
+        <!-- /. NAV SIDE  -->
+        <div id="page-wrapper" >
+            <div id="page-inner" >
+				
